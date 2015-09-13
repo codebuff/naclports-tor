@@ -1,0 +1,103 @@
+diff --git a/src/common/compat.c b/src/common/compat.c
+--- a/src/common/compat.c
++++ b/src/common/compat.c
+@@ -1542,6 +1542,11 @@ set_max_file_descriptors(rlim_t limit, int *max_out)
+    * http://archives.seul.org/or/talk/Aug-2006/msg00210.html
+    * For an iPhone, 9999 should work. For Windows and all other unknown
+    * systems we use 15000 as the default. */
++
++#ifdef __native_client__
++#undef HAVE_GETRLIMIT
++#endif
++
+ #ifndef HAVE_GETRLIMIT
+ #if defined(CYGWIN) || defined(__CYGWIN__)
+   const char *platform = "Cygwin";
+@@ -3225,4 +3230,3 @@ tor_sleep_msec(int msec)
+ #endif
+ }
+ #endif
+-
+diff --git a/src/common/util.c b/src/common/util.c
+--- a/src/common/util.c
++++ b/src/common/util.c
+@@ -2191,9 +2191,12 @@ check_private_dir(const char *dirname, cpd_check_t check,
+         "%s (%d). Perhaps you are running Tor as the wrong user?",
+                          dirname, process_ownername, (int)running_uid,
+                          pw ? pw->pw_name : "<unknown>", (int)st.st_uid);
+-
+     tor_free(process_ownername);
++#ifdef __native_client__
++    printf("\n>> nacl sometimes doesn't set UID properly, ignoring...\n");
++#else
+     return -1;
++#endif
+   }
+   if ( (check & (CPD_GROUP_OK|CPD_GROUP_READ))
+        && (st.st_gid != running_gid) ) {
+@@ -5421,4 +5424,3 @@ tor_weak_random_range(tor_weak_rng_t *rng, int32_t top)
+   } while (result >= top);
+   return result;
+ }
+-
+diff --git a/src/ext/csiphash.c b/src/ext/csiphash.c
+--- a/src/ext/csiphash.c
++++ b/src/ext/csiphash.c
+@@ -56,7 +56,13 @@
+ #  if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
+ #    include <sys/endian.h>
+ #  else
+-#    include <endian.h>
++#    ifdef _NEWLIB_VERSION // if TOOLCHAIN=newlib
++       // newlib endian.h doesn't contain le64toh()
++       // nacl is little endian thus le64toh is a nop
++#      define le64toh(x) (x)
++#    else // the usual
++#      include <endian.h>
++#    endif
+ #  endif
+ #  if defined(__BYTE_ORDER) && defined(__LITTLE_ENDIAN) && \
+ 	__BYTE_ORDER == __LITTLE_ENDIAN
+diff --git a/src/or/config.c b/src/or/config.c
+--- a/src/or/config.c
++++ b/src/or/config.c
+@@ -1375,10 +1375,14 @@ options_act(const or_options_t *old_options)
+   /* Write control ports to disk as appropriate */
+   control_ports_write_to_file();
+ 
++// nacl_io don't support file locking (yet)
++// #TODO(dt) remove following,once file locking is supported
++#ifndef __native_client__
+   if (running_tor && !have_lockfile()) {
+     if (try_locking(options, 1) < 0)
+       return -1;
+   }
++#endif
+ 
+   if (consider_adding_dir_servers(options, old_options) < 0)
+     return -1;
+@@ -7109,4 +7113,3 @@ init_cookie_authentication(const char *fname, const char *header,
+   tor_free(cookie_file_str);
+   return retval;
+ }
+-
+diff --git a/src/or/main.c b/src/or/main.c
+--- a/src/or/main.c
++++ b/src/or/main.c
+@@ -2402,6 +2402,11 @@ void
+ handle_signals(int is_parent)
+ {
+ #ifndef _WIN32 /* do signal stuff only on Unix */
++#ifdef __native_client__
++// nacl doesn't support signals(no support in libevent)
++(void)is_parent;
++return;
++#endif
+   int i;
+   static const int signals[] = {
+     SIGINT,  /* do a controlled slow shutdown */
+@@ -3127,4 +3132,3 @@ tor_main(int argc, char *argv[])
+   tor_cleanup();
+   return result;
+ }
+-
