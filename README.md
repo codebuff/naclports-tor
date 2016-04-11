@@ -7,5 +7,5 @@ Instructions
 
 Some Links  
 - [Chromium Codereview Link](https://codereview.chromium.org/1311703003/)
-- This was a GSoC'15 project, to see details on GSoC website click [here](https://www.google-melange.com/gsoc/project/details/google/gsoc2015/deepankar_tyagi/5634387206995968)  
-- You can also install the Chrome app from [webstore](https://chrome.google.com/webstore/detail/krotorbeta-access-interne/dfdhngcahhplaibahkkjhdklhihbaikl)
+- This was a GSoC'15 project, to see details on GSoC website click [here](https://deepankar.io/gsoc)  
+- You can also install the Chrome app from [webstore](https://deepankar.io/kronymous/webstore)
