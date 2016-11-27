@@ -24,11 +24,11 @@ keeps track of all those.**
 
    **Reason:** On NaCl, the UIDs are not preserved(properly)
   
-   **Details:** To debug/see implementation see /src/common/util.c [line 2195]
+   **Details:** To debug/see implementation see /src/common/util.c
 
 4. **Callbacks due to signals are NOT supported.**
 
-   **Reason:** No support for POSIX signals on NaCl.io.
+   **Reason:** No support for POSIX signals on NaCl
 
    **Details:** sigaction(...) and signal(...) are not(yet) implemented on 
      NaCl.io,thus the calls evsignal_add,evsignal_del,evsignal_pending should 
@@ -51,9 +51,9 @@ keeps track of all those.**
   glibc + i686. For now they are altogether skipped for every 
   toolchain + architecture.[they work fine against clang-newlib]
 
-6. **Build against glibc is not functional.**
+6. **Only pnacl builds are supported**
   
-   **Reason:** unknown (issue de-prioritized,glibc disabled in pkg_info)
+   Chrome apps are being phased out by Google, pnacl platfrom is only one to be supported in future.
 
 **Notes**
 
@@ -61,4 +61,4 @@ keeps track of all those.**
    published directory as chrome app instead of make run / make serve
  - The default port is 9999 instead of usual 9150, 
    thus point your (socks)proxy to 127.0.0.1:9999
- - Once the GUI is ready, parameters can be generated/modified as per the user
+ - The chrome app is titled Kronymous and is available on webstore
