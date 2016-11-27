@@ -1,103 +1,123 @@
 diff --git a/src/common/compat.c b/src/common/compat.c
 --- a/src/common/compat.c
 +++ b/src/common/compat.c
-@@ -1542,6 +1542,11 @@ set_max_file_descriptors(rlim_t limit, int *max_out)
-    * http://archives.seul.org/or/talk/Aug-2006/msg00210.html
-    * For an iPhone, 9999 should work. For Windows and all other unknown
-    * systems we use 15000 as the default. */
-+
-+#ifdef __native_client__
-+#undef HAVE_GETRLIMIT
-+#endif
-+
- #ifndef HAVE_GETRLIMIT
- #if defined(CYGWIN) || defined(__CYGWIN__)
-   const char *platform = "Cygwin";
-@@ -3225,4 +3230,3 @@ tor_sleep_msec(int msec)
- #endif
- }
- #endif
+@@ -1684,7 +1684,11 @@ set_max_file_descriptors(rlim_t limit, int *max_out)
+              "ConnLimit must be at least %d. Failing.", ULIMIT_BUFFER);
+     return -1;
+   }
 -
++  // codebuff_patch_04
++  // getrlimit not implemented on nacl
++  #ifdef __native_client__
++    #undef HAVE_GETRLIMIT
++  #endif
+   /* Define some maximum connections values for systems where we cannot
+    * automatically determine a limit. Re Cygwin, see
+    * http://archives.seul.org/or/talk/Aug-2006/msg00210.html
 diff --git a/src/common/util.c b/src/common/util.c
 --- a/src/common/util.c
 +++ b/src/common/util.c
-@@ -2191,9 +2191,12 @@ check_private_dir(const char *dirname, cpd_check_t check,
-         "%s (%d). Perhaps you are running Tor as the wrong user?",
-                          dirname, process_ownername, (int)running_uid,
-                          pw ? pw->pw_name : "<unknown>", (int)st.st_uid);
--
-     tor_free(process_ownername);
-+#ifdef __native_client__
-+    printf("\n>> nacl sometimes doesn't set UID properly, ignoring...\n");
-+#else
-     return -1;
-+#endif
+@@ -2197,14 +2197,22 @@ check_private_dir(const char *dirname, cpd_check_t check,
+
+     pw = tor_getpwuid(st.st_uid);
+
+-    log_warn(LD_FS, "%s is not owned by this user (%s, %d) but by "
+-        "%s (%d). Perhaps you are running Tor as the wrong user?",
+-                         dirname, process_ownername, (int)running_uid,
+-                         pw ? pw->pw_name : "<unknown>", (int)st.st_uid);
++    //codebuff_patch_05
++    // nacl does not set/persist/report file/dir owner uid and guid properly
++    // on chrome every extension/app is in seperate "sandbox",
++    // thus (arguably) avoiding these security checks is not a risk
++    #ifndef __native_client__
++      tor_free(process_ownername);
++      close(fd);
++      log_warn(LD_FS, "%s is not owned by this user (%s, %d) but by "
++          "%s (%d). Perhaps you are running Tor as the wrong user?",
++                           dirname, process_ownername, (int)running_uid,
++                           pw ? pw->pw_name : "<unknown>", (int)st.st_uid);
+
+-    tor_free(process_ownername);
+-    close(fd);
+-    return -1;
++      tor_free(process_ownername);
++      close(fd);
++      return -1;
++    #endif
    }
    if ( (check & (CPD_GROUP_OK|CPD_GROUP_READ))
-        && (st.st_gid != running_gid) ) {
-@@ -5421,4 +5424,3 @@ tor_weak_random_range(tor_weak_rng_t *rng, int32_t top)
-   } while (result >= top);
-   return result;
- }
+        && (st.st_gid != running_gid) && (st.st_gid != 0)) {
+@@ -2214,14 +2222,20 @@ check_private_dir(const char *dirname, cpd_check_t check,
+     process_groupname = gr ? tor_strdup(gr->gr_name) : tor_strdup("<unknown>");
+     gr = getgrgid(st.st_gid);
+
+-    log_warn(LD_FS, "%s is not owned by this group (%s, %d) but by group "
+-             "%s (%d).  Are you running Tor as the wrong user?",
+-             dirname, process_groupname, (int)running_gid,
+-             gr ?  gr->gr_name : "<unknown>", (int)st.st_gid);
 -
-diff --git a/src/ext/csiphash.c b/src/ext/csiphash.c
---- a/src/ext/csiphash.c
-+++ b/src/ext/csiphash.c
-@@ -56,7 +56,13 @@
- #  if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
- #    include <sys/endian.h>
- #  else
--#    include <endian.h>
-+#    ifdef _NEWLIB_VERSION // if TOOLCHAIN=newlib
-+       // newlib endian.h doesn't contain le64toh()
-+       // nacl is little endian thus le64toh is a nop
-+#      define le64toh(x) (x)
-+#    else // the usual
-+#      include <endian.h>
-+#    endif
- #  endif
- #  if defined(__BYTE_ORDER) && defined(__LITTLE_ENDIAN) && \
- 	__BYTE_ORDER == __LITTLE_ENDIAN
+-    tor_free(process_groupname);
+-    close(fd);
+-    return -1;
++    // codebuff_patch_06
++    // nacl does not set/persist/report file/dir owner uid and guid properly
++    // on chrome every extension/app is in seperate "sandbox",
++    // thus (arguably) avoiding these security checks is not a risk
++    #ifndef __native_client__
++      log_warn(LD_FS, "%s is not owned by this group (%s, %d) but by group "
++               "%s (%d).  Are you running Tor as the wrong user?",
++               dirname, process_groupname, (int)running_gid,
++               gr ?  gr->gr_name : "<unknown>", (int)st.st_gid);
++
++      tor_free(process_groupname);
++      close(fd);
++      return -1;
++    #endif
+   }
+   unsigned unwanted_bits = 0;
+   if (check & (CPD_GROUP_OK|CPD_GROUP_READ)) {
 diff --git a/src/or/config.c b/src/or/config.c
 --- a/src/or/config.c
 +++ b/src/or/config.c
-@@ -1375,10 +1375,14 @@ options_act(const or_options_t *old_options)
+@@ -1481,10 +1481,14 @@ options_act(const or_options_t *old_options)
    /* Write control ports to disk as appropriate */
    control_ports_write_to_file();
- 
-+// nacl_io don't support file locking (yet)
-+// #TODO(dt) remove following,once file locking is supported
-+#ifndef __native_client__
+
++  // codebuff_patch_03
++  // nacl_io does not support file locking (yet)
++  #ifndef __native_client__
    if (running_tor && !have_lockfile()) {
      if (try_locking(options, 1) < 0)
        return -1;
    }
-+#endif
- 
++  #endif
+
    if (consider_adding_dir_servers(options, old_options) < 0)
      return -1;
-@@ -7109,4 +7113,3 @@ init_cookie_authentication(const char *fname, const char *header,
-   tor_free(cookie_file_str);
-   return retval;
- }
--
 diff --git a/src/or/main.c b/src/or/main.c
 --- a/src/or/main.c
 +++ b/src/or/main.c
-@@ -2402,6 +2402,11 @@ void
+@@ -2875,6 +2875,11 @@ static struct {
+ void
  handle_signals(int is_parent)
  {
- #ifndef _WIN32 /* do signal stuff only on Unix */
-+#ifdef __native_client__
-+// nacl doesn't support signals(no support in libevent)
-+(void)is_parent;
-+return;
-+#endif
++  // codebuff_patch_01
++  // nacl doesn't support signals(no support in libevent)
++  #ifdef __native_client__
++    return;
++  #endif
    int i;
-   static const int signals[] = {
-     SIGINT,  /* do a controlled slow shutdown */
-@@ -3127,4 +3132,3 @@ tor_main(int argc, char *argv[])
-   tor_cleanup();
-   return result;
- }
--
+   if (is_parent) {
+     for (i = 0; signal_handlers[i].signal_value >= 0; ++i) {
+@@ -2918,6 +2923,11 @@ handle_signals(int is_parent)
+ void
+ activate_signal(int signal_num)
+ {
++  // codebuff_patch_02
++  // nacl doesn't support signals(no support in libevent)
++  #ifdef __native_client__
++	return;
++  #endif
+   int i;
+   for (i = 0; signal_handlers[i].signal_value >= 0; ++i) {
+     if (signal_handlers[i].signal_value == signal_num) {

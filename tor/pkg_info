@@ -1,7 +1,7 @@
 NAME=tor
-VERSION=0.2.6.10
-URL=https://www.torproject.org/dist/tor-0.2.6.10.tar.gz
+VERSION=0.2.8.9
+URL=https://dist.torproject.org/tor-0.2.8.9.tar.gz
 LICENSE=CUSTOM
-SHA1=4bf9689b311efce70db96c88d1f466caa41e0277
+SHA1=fab0cb618bea15d19428dd820403ba3267b17b06
 DEPENDS=(nacl-spawn openssl zlib libevent)
-DISABLED_TOOLCHAIN=(emscripten pnacl glibc)
+DISABLED_TOOLCHAIN=(emscripten glibc)
